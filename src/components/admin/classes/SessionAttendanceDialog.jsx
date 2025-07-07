@@ -78,8 +78,8 @@ const SessionAttendanceDialog = ({ open, session, onClose }) => {
 
     try {
       setLoading(true);
+      // This should use the correct endpoint from adminService
       const data = await adminService.getSessionAttendance(session.id);
-      console.log("Session attendance:", data);
       setAttendance(data || []);
     } catch (error) {
       console.error("Error fetching session attendance:", error);

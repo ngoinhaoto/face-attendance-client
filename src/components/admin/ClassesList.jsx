@@ -20,6 +20,7 @@ import ClassStatsDialog from "./classes/ClassStatsDialog";
 import ClassAttendanceSummary from "./classes/ClassAttendanceSummary";
 import useClasses from "../../hooks/useClasses"; // We'll create this hook
 import { format } from "date-fns";
+import cacheService from '../../utils/cacheService';
 
 const ClassesList = () => {
   const {
@@ -92,6 +93,28 @@ const ClassesList = () => {
       cls.description?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
+  // Add cache invalidation when performing operations
+  const handleAddClass = async (classData) => {
+    const result = await createClass(classData);
+    if (result === true) {
+      // Clear dashboard caches after class creation
+      cacheService.invalidateByPrefix('teacher_dashboard_');
+      cacheService.invalidateByPrefix('admin_dashboard_');
+    }
+    setOpenAddDialog(false);
+  };
+
+  const handleEditClass = async (classId, classData) => {
+    const result = await updateClass(classId, classData);
+    if (result === true) {
+      // Clear dashboard caches after class update
+      cacheService.invalidateByPrefix('teacher_dashboard_');
+      cacheService.invalidateByPrefix('admin_dashboard_');
+    }
+    setOpenEditDialog(false);
+    setClassToEdit(null);
+  };
+
   return (
     <Box>
       <Typography variant="h4" sx={{ mb: 4 }}>
@@ -155,7 +178,7 @@ const ClassesList = () => {
         open={openAddDialog}
         teachers={teachers}
         onClose={() => setOpenAddDialog(false)}
-        onAddClass={createClass}
+        onAddClass={handleAddClass}
         onSuccess={() => fetchClasses()}
       />
 
@@ -167,7 +190,7 @@ const ClassesList = () => {
           setOpenEditDialog(false);
           setClassToEdit(null);
         }}
-        onUpdateClass={updateClass}
+        onUpdateClass={handleEditClass}
       />
 
       <ClassDeleteDialog

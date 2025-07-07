@@ -18,6 +18,8 @@ import Dashboard from "./components/shared/Dashboard";
 import PrivateRoute from "./components/shared/PrivateRoute";
 import AttendanceKiosk from "./components/kiosk/AttendanceKiosk";
 import AdminRoute from "./components/shared/routes/AdminRoute";
+import ForgotPassword from "./components/auth/ForgotPassword";
+import ResetPassword from "./components/auth/ResetPassword";
 
 // Create a custom theme with better aesthetics
 const theme = createTheme({
@@ -175,6 +177,14 @@ function AppContent() {
       <Route
         path="/login"
         element={<KioskModeGuard component={<LoginPage />} />}
+      />
+      <Route
+        path="/forgot-password"
+        element={<KioskModeGuard component={<ForgotPassword />} />}
+      />
+      <Route
+        path="/reset-password"
+        element={<KioskModeGuard component={<ResetPassword />} />}
       />
       <Route
         path="/dashboard/*"

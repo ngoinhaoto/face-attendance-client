@@ -1,152 +1,139 @@
 import apiService from "./apiService";
-import { getCachedData, setCachedData } from "../utils/apiCache";
-import { clearCacheKey, clearCachePattern } from "../utils/apiCache";
-// Track in-flight requests to prevent duplicates
-const pendingRequests = {};
+import cacheService from "../utils/cacheService";
 
-// Helper to handle API requests with caching
-const cachedRequest = async (cacheKey, requestFn) => {
-  // Check cache first
-  const cachedData = getCachedData(cacheKey);
-  if (cachedData) {
-    console.log(`Using cached data for ${cacheKey}`);
-    return cachedData;
-  }
+// Cache utility functions
+const getCachedData = (key) => cacheService.get(key);
+const setCachedData = (key, data) => cacheService.set(key, data);
+const clearCacheKey = (key) => cacheService.invalidate(key);
+const clearCachePattern = (prefix) => cacheService.invalidateByPrefix(prefix);
+const clearCache = () => cacheService.clear();
 
-  // Check if there's already a pending request for this key
-  if (pendingRequests[cacheKey]) {
-    console.log(`Request already in progress for ${cacheKey}, reusing promise`);
-    return pendingRequests[cacheKey];
-  }
-
-  // Create and store the request promise
-  try {
-    console.log(`Fetching data for ${cacheKey}`);
-    const requestPromise = requestFn();
-    pendingRequests[cacheKey] = requestPromise;
-
-    const result = await requestPromise;
-    setCachedData(cacheKey, result);
-    return result;
-  } finally {
-    // Clear the pending request reference
-    delete pendingRequests[cacheKey];
-  }
-};
-
-// Get all classes (with students if requested)
-const getClasses = async () => {
-  return cachedRequest("classes", async () => {
-    try {
-      const response = await apiService.get("/classes", {
-        params: { include_students: true },
-      });
-
-      // Ensure the students array exists for each class
-      const classes = response.data.map((cls) => ({
-        ...cls,
-        students: cls.students || [],
-      }));
-
-      return classes;
-    } catch (error) {
-      console.error("Error fetching classes:", error);
-      return [];
-    }
-  });
-};
-
-// Get students for a specific class
-const getClassStudents = async (classId) => {
-  return cachedRequest(`class_students_${classId}`, async () => {
-    try {
-      console.log(`Fetching students for class ${classId}`);
-      const response = await apiService.get(`/classes/${classId}/students`);
-      console.log(`Class ${classId} students response:`, response.data);
-      return response.data;
-    } catch (error) {
-      console.error(
-        `Error fetching class students for class ${classId}:`,
-        error,
-      );
-      return [];
-    }
-  });
-};
-
-// Get all users (with caching)
-const getUsers = async (params = {}) => {
-  const cacheKey = `users_${JSON.stringify(params)}`;
+// GET operations
+const getUsers = async (role = null) => {
+  const cacheKey = role ? `users_${role}` : "users";
   const cachedData = getCachedData(cacheKey);
 
   if (cachedData) {
-    console.log("Using cached users data");
     return cachedData;
   }
 
   try {
-    const response = await apiService.get("/users", { params });
-    setCachedData(cacheKey, response.data);
-    return response.data;
+    const response = await apiService.get("/users", {
+      params: { role },
+    });
+    const users = response.data || [];
+    setCachedData(cacheKey, users);
+    return users;
   } catch (error) {
     console.error("Error fetching users:", error);
-    // Return empty array instead of throwing
-    return [];
+    throw error;
   }
 };
 
-// Update the getClasses function to ensure we get all the data including students
-
-const getAllClasses = async () => {
-  const cacheKey = "all_classes";
+// Enhanced functions with caching
+const getClasses = async (includeDetails = true) => {
+  const cacheKey = "classes_list";
   const cachedData = getCachedData(cacheKey);
 
   if (cachedData) {
-    console.log("Using cached all classes data");
     return cachedData;
   }
 
   try {
     const response = await apiService.get("/classes", {
-      params: { include_students: true }, // Add this parameter if supported by your API
+      params: {
+        include_students: includeDetails,
+        include_sessions: includeDetails,
+        include_sessions_count: true,
+      },
     });
 
-    // Log the response to debug
-    console.log("All Classes response:", response.data);
-
-    // Ensure the students array exists for each class
+    // If the API doesn't return students/sessions arrays, add empty arrays
     const classes = response.data.map((cls) => ({
       ...cls,
       students: cls.students || [],
+      sessions: cls.sessions || [],
     }));
+
+    // If details are requested but not included in response, fetch them
+    if (includeDetails) {
+      await Promise.all(
+        classes.map(async (cls) => {
+          // Only fetch students if not already included
+          if (!Array.isArray(cls.students) || cls.students.length === 0) {
+            cls.students = await getClassStudents(cls.id);
+          }
+
+          // Only fetch sessions if not already included
+          if (!Array.isArray(cls.sessions) || cls.sessions.length === 0) {
+            cls.sessions = await getClassSessions(cls.id);
+          }
+        }),
+      );
+    }
 
     setCachedData(cacheKey, classes);
     return classes;
   } catch (error) {
-    console.error("Error fetching all classes:", error);
+    console.error("Error fetching classes:", error);
+    throw error;
+  }
+};
+
+const getClassStudents = async (classId) => {
+  const cacheKey = `class_students_${classId}`;
+  const cachedData = getCachedData(cacheKey);
+
+  if (cachedData) {
+    return cachedData;
+  }
+
+  try {
+    const response = await apiService.get(`/classes/${classId}/students`);
+    const students = response.data || [];
+    setCachedData(cacheKey, students);
+    return students;
+  } catch (error) {
+    console.error(`Error fetching students for class ${classId}:`, error);
     return [];
   }
 };
 
 const getClassSessions = async (classId) => {
+  const cacheKey = `class_sessions_${classId}`;
+  const cachedData = getCachedData(cacheKey);
+
+  if (cachedData) {
+    return cachedData;
+  }
+
   try {
     const response = await apiService.get(`/classes/${classId}/sessions`);
-    return response.data;
+    const sessions = response.data || [];
+    setCachedData(cacheKey, sessions);
+    return sessions;
   } catch (error) {
-    console.error("Error fetching class sessions:", error);
+    console.error(`Error fetching sessions for class ${classId}:`, error);
     return [];
   }
 };
 
 const getSessionAttendance = async (sessionId) => {
+  const cacheKey = `attendance_session_${sessionId}`;
+  const cachedData = getCachedData(cacheKey);
+
+  if (cachedData) {
+    return cachedData;
+  }
+
   try {
-    const response = await apiService.get(
-      `/attendance/sessions/${sessionId}/students`,
-    );
-    return response.data;
+    const response = await apiService.get(`/attendance/sessions/${sessionId}`);
+    const attendanceData = response.data || [];
+    setCachedData(cacheKey, attendanceData);
+    return attendanceData;
   } catch (error) {
-    console.error("Error fetching session attendance:", error);
-    return [];
+    console.error(`Error fetching attendance for session ${sessionId}:`, error);
+    throw error;
   }
 };
 
@@ -177,6 +164,7 @@ const createClass = async (classData) => {
 
     // Clear classes cache
     clearCacheKey("classes");
+    clearCacheKey("classes_list");
     clearCacheKey("all_classes");
 
     return response.data;
@@ -190,7 +178,12 @@ const createClassSession = async (sessionData) => {
   try {
     const response = await apiService.post("/classes/sessions", sessionData);
 
-    // Clear related caches
+    // Clear ALL class-related caches to ensure counts update everywhere
+    clearCacheKey("classes");
+    clearCacheKey("classes_list");
+    clearCacheKey("all_classes");
+
+    // Clear specific class cache
     if (sessionData.class_id) {
       clearCachePattern(`class_${sessionData.class_id}`);
     }
@@ -218,6 +211,7 @@ const deleteUser = async (userId) => {
     // User might be in classes, so clear class-related caches
     clearCachePattern("class_students_");
     clearCachePattern("classes");
+    clearCacheKey("classes_list");
 
     return response.data;
   } catch (error) {
@@ -232,6 +226,7 @@ const deleteClass = async (classId) => {
 
     // Clear relevant caches
     clearCacheKey("classes");
+    clearCacheKey("classes_list");
     clearCacheKey("all_classes");
     clearCachePattern(`class_${classId}`);
 
@@ -247,11 +242,32 @@ const deleteClass = async (classId) => {
 
 const deleteClassSession = async (sessionId) => {
   try {
+    // First, get the session to know its class_id
+    let classId;
+    try {
+      const sessionResponse = await apiService.get(
+        `/classes/sessions/${sessionId}`,
+      );
+      classId = sessionResponse.data.class_id;
+    } catch (err) {
+      console.warn("Couldn't get session details before deletion:", err);
+    }
+
+    // Now delete the session
     const response = await apiService.delete(`/classes/sessions/${sessionId}`);
 
-    // Clear caches related to sessions
-    // We don't know the class ID here, so clear all class-related caches
-    clearCachePattern("class_");
+    // Clear specific caches
+    clearCacheKey("classes"); // This is critical - clear the main classes cache
+    clearCacheKey("classes_list");
+    clearCacheKey("all_classes");
+
+    // If we got the class ID, clear its specific cache too
+    if (classId) {
+      clearCachePattern(`class_${classId}`);
+    } else {
+      // If we couldn't get the class ID, clear all class-related caches
+      clearCachePattern("class_");
+    }
 
     // Also clear dashboard data
     clearCachePattern("dashboard_");
@@ -278,6 +294,7 @@ const updateUser = async (userId, userData) => {
     if (userData.role === "student") {
       clearCachePattern("class_students_");
       clearCachePattern("classes"); // Clear classes cache since it includes student data
+      clearCacheKey("classes_list");
     }
 
     console.log("Update response:", response.data);
@@ -300,6 +317,7 @@ const updateClass = async (classId, classData) => {
 
     // Clear all class-related caches
     clearCacheKey("classes");
+    clearCacheKey("classes_list");
     clearCacheKey("all_classes");
     clearCachePattern(`class_${classId}`);
 
@@ -329,6 +347,10 @@ const updateClassSession = async (sessionId, sessionData) => {
       clearCachePattern(`class_${sessionData.class_id}`);
     }
 
+    clearCacheKey("classes");
+    clearCacheKey("classes_list");
+    clearCacheKey("all_classes");
+
     // Clear dashboard data
     clearCachePattern("dashboard_");
 
@@ -350,6 +372,7 @@ const addStudentToClass = async (classId, studentId) => {
     clearCachePattern(`class_${classId}`);
     clearCachePattern(`class_students_${classId}`);
     clearCacheKey("classes");
+    clearCacheKey("classes_list");
     clearCacheKey("all_classes");
 
     return response.data;
@@ -370,6 +393,7 @@ const removeStudentFromClass = async (classId, studentId) => {
     clearCachePattern(`class_${classId}`);
     clearCachePattern(`class_students_${classId}`);
     clearCacheKey("classes");
+    clearCacheKey("classes_list");
     clearCacheKey("all_classes");
 
     console.log("Remove student response:", response.data);
@@ -407,7 +431,7 @@ const updateAttendanceStatus = async (sessionId, studentId, status) => {
   }
 };
 
-// Add this to your adminService.js
+// Dashboard data
 const getDashboardData = async (dateRange) => {
   const cacheKey = `dashboard_${dateRange.startDate}_${dateRange.endDate}`;
   const cachedData = getCachedData(cacheKey);
@@ -452,25 +476,108 @@ const getDashboardData = async (dateRange) => {
   }
 };
 
+// Batch operations
+const getMultipleSessionsAttendance = async (sessionIds) => {
+  if (!sessionIds || sessionIds.length === 0) return {};
+
+  const result = {};
+
+  // Process in batches of 5 to avoid too many parallel requests
+  const batchSize = 5;
+  for (let i = 0; i < sessionIds.length; i += batchSize) {
+    const batch = sessionIds.slice(i, i + batchSize);
+
+    // Create promises for this batch
+    const batchPromises = batch.map((sessionId) =>
+      getSessionAttendance(sessionId)
+        .then((data) => ({ sessionId, data }))
+        .catch((error) => ({ sessionId, error })),
+    );
+
+    // Execute this batch in parallel
+    const batchResults = await Promise.all(batchPromises);
+
+    // Store results
+    batchResults.forEach(({ sessionId, data, error }) => {
+      if (error) {
+        result[sessionId] = { error };
+      } else {
+        result[sessionId] = data;
+      }
+    });
+  }
+
+  return result;
+};
+
+const getSessionAttendanceByClass = async (classId, sessionId) => {
+  try {
+    const response = await apiService.get(
+      `/classes/${classId}/sessions/${sessionId}/attendance`,
+    );
+    return response.data;
+  } catch (error) {
+    console.error(
+      `Error fetching attendance for class ${classId}, session ${sessionId}:`,
+      error,
+    );
+    throw error; // Throw the error so we can fall back to the other endpoint
+  }
+};
+
+// Fetch classes with details for dashboard
+const fetchClassesWithDetails = async () => {
+  const classes = await getClasses(true);
+
+  // Ensure all classes have students and sessions populated
+  return classes.map((cls) => ({
+    ...cls,
+    students: Array.isArray(cls.students) ? cls.students : [],
+    sessions: Array.isArray(cls.sessions) ? cls.sessions : [],
+  }));
+};
+
+// Export all functions
 const adminService = {
+  // GET operations
   getUsers,
   getClasses,
   getClassStudents,
   getClassSessions,
   getSessionAttendance,
+
+  // CREATE operations
   createUser,
-  deleteUser,
   createClass,
-  updateClass,
-  deleteClass,
+  createClassSession,
+
+  // UPDATE operations
   updateUser,
+  updateClass,
+  updateClassSession,
+  updateAttendanceStatus,
+
+  // DELETE operations
+  deleteUser,
+  deleteClass,
+  deleteClassSession,
+
+  // STUDENT-CLASS operations
   addStudentToClass,
   removeStudentFromClass,
-  createClassSession, // Add this
-  updateClassSession, // Add this
-  deleteClassSession, // Add this
-  updateAttendanceStatus, // Add this
-  getDashboardData, // Add this
+
+  // DASHBOARD operations
+  getDashboardData,
+  getMultipleSessionsAttendance,
+  getSessionAttendanceByClass,
+  fetchClassesWithDetails,
+
+  // CACHE operations
+  clearCache,
+  clearCacheKey,
+  clearCachePattern,
+  getCachedData,
+  setCachedData,
 };
 
 export default adminService;

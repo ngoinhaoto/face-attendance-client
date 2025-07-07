@@ -60,7 +60,8 @@ const LoginPage = () => {
           {error && <Alert severity="error">{error}</Alert>}
           {message === "admin_required" && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              Administrator access required. Please log in with an admin account.
+              Administrator access required. Please log in with an admin
+              account.
             </Alert>
           )}
 
@@ -113,6 +114,17 @@ const LoginPage = () => {
               </Form>
             )}
           </Formik>
+
+          <Box sx={{ mt: 2, textAlign: "right" }}>
+            <Button
+              component={Link}
+              to="/forgot-password"
+              variant="contained"
+              color="warning"
+            >
+              Forgot password?
+            </Button>
+          </Box>
 
           <Box sx={{ textAlign: "center", mt: 3 }}>
             <Typography variant="body2" color="text.secondary" mb={1}>

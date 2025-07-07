@@ -36,6 +36,7 @@ import { toast } from "react-toastify";
 import adminService from "../../../api/adminService";
 import { format, parseISO } from "date-fns";
 import SessionAttendanceDialog from "./SessionAttendanceDialog";
+import cacheService from "../../../utils/cacheService";
 
 const ClassSessionsDialog = ({ open, classData, onClose, onUpdate }) => {
   const [sessions, setSessions] = useState([]);
@@ -176,6 +177,9 @@ const ClassSessionsDialog = ({ open, classData, onClose, onUpdate }) => {
       };
 
       await adminService.createClassSession(sessionData);
+      // Invalidate dashboard caches
+      cacheService.invalidateByPrefix("teacher_dashboard_");
+      cacheService.invalidateByPrefix("admin_dashboard_");
 
       // Refresh sessions
       await fetchSessions();
@@ -250,10 +254,13 @@ const ClassSessionsDialog = ({ open, classData, onClose, onUpdate }) => {
 
       await adminService.deleteClassSession(sessionId);
 
+      // Force clear all cached data
+      adminService.clearCache();
+
       // Refresh sessions
       await fetchSessions();
 
-      // Notify parent component
+      // Notify parent component to refresh class data (including session counts)
       if (onUpdate) onUpdate();
 
       toast.success("Session deleted successfully");

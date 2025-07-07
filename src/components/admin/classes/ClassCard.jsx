@@ -37,6 +37,7 @@ const ClassCard = ({
     // If no teacher info is available
     return "Not assigned";
   };
+  console.log("Classdata: ", classData);
 
   return (
     <Card>
@@ -83,7 +84,21 @@ const ClassCard = ({
           </Box>
           <Typography variant="body2">
             Sessions:{" "}
-            {Array.isArray(classData.sessions) ? classData.sessions.length : 0}
+            <Chip
+              size="small"
+              label={
+                classData.sessions
+                  ? classData.sessions.length
+                  : classData.sessions_count || 0
+              }
+              color={
+                (classData.sessions && classData.sessions.length > 0) ||
+                classData.sessions_count > 0
+                  ? "warning"
+                  : "default"
+              }
+              onClick={() => onManageSessions(classData)}
+            />
           </Typography>
         </Box>
       </CardContent>

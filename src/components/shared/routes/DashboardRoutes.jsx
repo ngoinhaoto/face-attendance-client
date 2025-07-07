@@ -9,6 +9,13 @@ import UserProfile from "../UserProfile";
 import StudentDashboard from "../../student/StudentDashboard";
 import AttendanceCheckIn from "../../student/AttendanceCheckIn";
 
+import TeacherDashboard from "../../teacher/TeacherDashboard";
+import ClassSessionsPage from "../../teacher/ClassSessionsPage";
+import ClassAttendanceSummary from "../../admin/classes/ClassAttendanceSummary";
+import SessionAttendancePage from "../../teacher/SessionAttendancePage";
+import SessionDetailsPage from "../../teacher/SessionDetailsPage";
+import TeacherSessionsList from "../../teacher/TeacherSessionsList";
+
 const DashboardRoutes = ({ user }) => {
   // Redirect to login if user data is missing
   if (!user || !user.role) {
@@ -41,10 +48,49 @@ const TeacherRoutes = () => (
   <Routes>
     <Route path="/profile" element={<UserProfile />} />
     <Route path="/classes" element={<ClassesList />} />
+    <Route path="/" element={<TeacherDashboard />} />
+
+    {/* Class Management Routes */}
+    <Route path="/classes/:classId/sessions" element={<ClassSessionsPage />} />
+    <Route
+      path="/classes/:classId/attendance"
+      element={<ClassAttendanceSummary />}
+    />
+    <Route
+      path="/classes/:classId/sessions/:sessionId"
+      element={<SessionDetailsPage />}
+    />
+    <Route
+      path="/classes/:classId/sessions/:sessionId/attendance"
+      element={<SessionAttendancePage />}
+    />
+
+    {/* Additional Teacher-specific routes */}
+    <Route path="/my-classes" element={<TeacherDashboard />} />
+    <Route
+      path="/upcoming-sessions"
+      element={
+        <TeacherSessionsList
+          sessions={[]}
+          upcoming={true}
+          emptyMessage="No upcoming sessions"
+        />
+      }
+    />
+    <Route
+      path="/recent-sessions"
+      element={
+        <TeacherSessionsList
+          sessions={[]}
+          upcoming={false}
+          emptyMessage="No recent sessions"
+        />
+      }
+    />
+
     <Route path="*" element={<Navigate to="/dashboard" />} />
   </Routes>
 );
-
 const StudentRoutes = () => (
   <Routes>
     <Route path="/profile" element={<UserProfile />} />

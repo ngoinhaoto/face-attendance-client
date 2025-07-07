@@ -27,6 +27,7 @@ import {
 } from "@mui/icons-material";
 import adminService from "../../../api/adminService";
 import { toast } from "react-toastify";
+import cacheService from "../../../utils/cacheService";
 
 const ClassStudentsDialog = ({ open, classData, onClose, onUpdate }) => {
   const [students, setStudents] = useState([]);
@@ -80,6 +81,9 @@ const ClassStudentsDialog = ({ open, classData, onClose, onUpdate }) => {
       setError("");
 
       await adminService.addStudentToClass(classData.id, selectedStudent.id);
+      // Invalidate dashboard caches
+      cacheService.invalidateByPrefix("teacher_dashboard_");
+      cacheService.invalidateByPrefix("admin_dashboard_");
 
       // Refresh lists
       await fetchClassStudents();

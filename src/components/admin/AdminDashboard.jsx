@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Box, Grid, CircularProgress, Typography } from "@mui/material";
+import React, { useState, useEffect, useCallback } from "react";
+import { Box, Grid, CircularProgress, Typography, Button } from "@mui/material";
 import {
   format,
   subMonths,
@@ -9,6 +9,8 @@ import {
   endOfMonth,
 } from "date-fns";
 import adminService from "../../api/adminService";
+import cacheService from "../../utils/cacheService";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 // Import component files
 import StatCard from "./dashboard/StatCard";
@@ -141,55 +143,75 @@ const AdminDashboard = () => {
     }
   };
 
+  // Extract fetchData as a useCallback function at component level
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+
+    // Create a cache key based on date range
+    const cacheKey = `admin_dashboard_${dateRange.startDate}_${dateRange.endDate}`;
+    const cachedData = cacheService.get(cacheKey);
+
+    if (cachedData) {
+      console.log(`Using cached admin dashboard data`);
+      setStats(cachedData);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      // Use the consolidated endpoint
+      const dashboardData = await adminService.getDashboardData(dateRange);
+
+      const statsData = {
+        users: dashboardData?.users || {
+          total: 0,
+          admins: 0,
+          teachers: 0,
+          students: 0,
+        },
+        classes: dashboardData?.classes || [],
+        activityData: dashboardData?.activityData || [],
+        classesWithSizes: dashboardData?.classesWithSizes || [],
+      };
+
+      setStats(statsData);
+
+      // Cache the results
+      cacheService.set(cacheKey, statsData);
+    } catch (error) {
+      console.error(`Error fetching dashboard data:`, error);
+      // Initialize with empty data on error
+      setStats({
+        users: { total: 0, admins: 0, teachers: 0, students: 0 },
+        classes: [],
+        activityData: [],
+        classesWithSizes: [],
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange.startDate, dateRange.endDate]);
+
   useEffect(() => {
     // Add a request ID to prevent duplicate calls
     const requestId = Math.random().toString(36).substring(7);
     let isMounted = true;
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Use the new consolidated endpoint
-        const dashboardData = await adminService.getDashboardData(dateRange);
-
-        if (isMounted) {
-          setStats({
-            users: dashboardData?.users || {
-              total: 0,
-              admins: 0,
-              teachers: 0,
-              students: 0,
-            },
-            classes: dashboardData?.classes || [],
-            activityData: dashboardData?.activityData || [],
-            classesWithSizes: dashboardData?.classesWithSizes || [],
-          });
-        }
-      } catch (error) {
-        console.error(`Error fetching dashboard data (${requestId}):`, error);
-        // Initialize with empty data on error
-        if (isMounted) {
-          setStats({
-            users: { total: 0, admins: 0, teachers: 0, students: 0 },
-            classes: [],
-            activityData: [],
-            classesWithSizes: [],
-          });
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+    const executeFetch = async () => {
+      console.log(`Starting dashboard data fetch (${requestId})`);
+      if (isMounted) {
+        await fetchData();
       }
     };
 
-    console.log(`Starting dashboard data fetch (${requestId})`);
-    fetchData();
+    executeFetch();
 
     // Cleanup function to prevent state updates after unmount
     return () => {
       isMounted = false;
       console.log(`Canceled dashboard data fetch (${requestId})`);
     };
-  }, [dateRange.startDate, dateRange.endDate]);
+  }, [fetchData]);
 
   // Define stat cards data
   const statCards = [
@@ -225,6 +247,14 @@ const AdminDashboard = () => {
     { name: "Teachers", value: stats.users.teachers },
     { name: "Students", value: stats.users.students },
   ];
+
+  const handleRefresh = () => {
+    // Clear dashboard caches
+    cacheService.invalidateByPrefix("admin_dashboard_");
+
+    // Re-fetch data
+    fetchData();
+  };
 
   if (loading) {
     return (

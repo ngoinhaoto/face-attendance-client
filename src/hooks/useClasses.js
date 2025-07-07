@@ -128,6 +128,20 @@ const useClasses = () => {
     }
   };
 
+  const fetchClassesWithDetails = async () => {
+    const classes = await adminService.getClasses();
+    const classesWithDetails = await Promise.all(
+      classes.map(async (cls) => {
+        const [students, sessions] = await Promise.all([
+          adminService.getClassStudents(cls.id),
+          adminService.getClassSessions(cls.id),
+        ]);
+        return { ...cls, students, sessions };
+      }),
+    );
+    return classesWithDetails;
+  };
+
   // Delete a class
   const deleteClass = async (classId) => {
     setIsOperationLoading(true);
@@ -193,6 +207,7 @@ const useClasses = () => {
     updateClass,
     deleteClass,
     formatDateForInput,
+    fetchClassesWithDetails,
     getTeacherName,
   };
 };

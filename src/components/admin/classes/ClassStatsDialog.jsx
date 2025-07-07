@@ -78,11 +78,9 @@ const ClassStatsDialog = ({ open, classData, onClose }) => {
 
       // 3. Batch request all attendance data instead of one-by-one
       const sessionIds = sessionsData.map((session) => session.id);
-      const batchAttendanceData =
-        await adminService.getMultipleSessionsAttendance(sessionIds);
-
-      // Process the batch attendance data
       const attendanceData = {};
+
+      // Initialize counters and maps
       let totalPresent = 0;
       let totalLate = 0;
       let totalAbsent = 0;
@@ -103,44 +101,51 @@ const ClassStatsDialog = ({ open, classData, onClose }) => {
         };
       });
 
-      // Process each session's attendance
+      // Process sessions one by one
       for (const session of sessionsData) {
-        const sessionAttendance = batchAttendanceData[session.id];
-        if (!sessionAttendance || sessionAttendance.error) {
-          console.error(
-            `Error with session ${session.id}:`,
-            sessionAttendance?.error,
+        try {
+          // Update progress counter
+          setSessionsProcessed((prev) => prev + 1);
+
+          // Get attendance for this session
+          const sessionAttendance = await adminService.getSessionAttendance(
+            session.id,
           );
-          continue;
-        }
 
-        attendanceData[session.id] = sessionAttendance;
+          // Store in our data structure
+          attendanceData[session.id] = sessionAttendance || [];
 
-        // Process attendance for this session
-        sessionAttendance.forEach((record) => {
-          const status = record.status?.toLowerCase();
+          // Process this session's data
+          const sessionRecords = sessionAttendance || [];
+          sessionRecords.forEach((record) => {
+            const status = record.status?.toLowerCase();
 
-          // Update overall counts
-          if (status === "present") totalPresent++;
-          else if (status === "late") {
-            totalLate++;
-            totalLateMinutes += record.late_minutes || 0;
-          } else if (status === "absent") totalAbsent++;
-
-          // Update student stats
-          if (studentStatsMap[record.student_id]) {
-            const studentStat = studentStatsMap[record.student_id];
-            studentStat.sessions++;
-
-            if (status === "present") studentStat.present++;
+            // Update overall counts
+            if (status === "present") totalPresent++;
             else if (status === "late") {
-              studentStat.late++;
-              studentStat.totalLateMinutes += record.late_minutes || 0;
-            } else if (status === "absent") studentStat.absent++;
-          }
-        });
+              totalLate++;
+              totalLateMinutes += record.late_minutes || 0;
+            } else if (status === "absent") totalAbsent++;
 
-        setSessionsProcessed((prev) => prev + 1);
+            // Update student stats
+            if (studentStatsMap[record.student_id]) {
+              const studentStat = studentStatsMap[record.student_id];
+              studentStat.sessions++;
+
+              if (status === "present") studentStat.present++;
+              else if (status === "late") {
+                studentStat.late++;
+                studentStat.totalLateMinutes += record.late_minutes || 0;
+              } else if (status === "absent") studentStat.absent++;
+            }
+          });
+        } catch (err) {
+          console.error(
+            `Error fetching attendance for session ${session.id}:`,
+            err,
+          );
+          // Continue with other sessions even if one fails
+        }
       }
 
       // Calculate attendance rates for students

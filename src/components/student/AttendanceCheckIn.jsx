@@ -266,11 +266,6 @@ const AttendanceCheckIn = () => {
         },
       );
 
-      clearCachePattern(`attendance_session_${selectedSessionId}`);
-
-      // Clear dashboard data since attendance affects statistics
-      clearCachePattern("dashboard_");
-
       // Handle success
       stopCamera();
       setProcessingAttendance(false);
