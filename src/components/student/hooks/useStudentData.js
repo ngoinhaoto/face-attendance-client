@@ -86,13 +86,13 @@ export default function useStudentData(user) {
 
             // Calculate stats
             const presentCount = attendanceResponse.data.filter(
-              (record) => record.status === "PRESENT",
+              (record) => record.status?.toLowerCase() === "present",
             ).length;
             const lateCount = attendanceResponse.data.filter(
-              (record) => record.status === "LATE",
+              (record) => record.status?.toLowerCase() === "late",
             ).length;
             const absentCount = attendanceResponse.data.filter(
-              (record) => record.status === "ABSENT",
+              (record) => record.status?.toLowerCase() === "absent",
             ).length;
             const totalRecords = presentCount + lateCount + absentCount;
 

@@ -18,6 +18,10 @@ import {
   ListItemText,
   IconButton,
   Divider,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -55,6 +59,8 @@ const ClassSessionsPage = () => {
       .slice(0, 16),
     notes: "",
   });
+
+  const [sortField, setSortField] = useState("date_desc");
 
   useEffect(() => {
     fetchClassData();
@@ -255,6 +261,20 @@ const ClassSessionsPage = () => {
     navigate(`/dashboard/classes/${classId}/sessions/${session.id}/attendance`);
   };
 
+  // Add this sorting logic before rendering sessions
+  const sortedSessions = [...sessions].sort((a, b) => {
+    if (sortField === "date_asc") {
+      return new Date(a.session_date) - new Date(b.session_date);
+    } else if (sortField === "date_desc") {
+      return new Date(b.session_date) - new Date(a.session_date);
+    } else if (sortField === "start_asc") {
+      return new Date(a.start_time) - new Date(b.start_time);
+    } else if (sortField === "start_desc") {
+      return new Date(b.start_time) - new Date(a.start_time);
+    }
+    return 0;
+  });
+
   if (loading && !classData) {
     return (
       <Box
@@ -283,13 +303,28 @@ const ClassSessionsPage = () => {
         <Typography variant="h4">
           Sessions for {classData?.name} ({classData?.class_code})
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleOpenAddDialog}
-        >
-          Add Session
-        </Button>
+        <Box sx={{ display: "flex", gap: 2 }}>
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel>Sort By</InputLabel>
+            <Select
+              value={sortField}
+              label="Sort By"
+              onChange={(e) => setSortField(e.target.value)}
+            >
+              <MenuItem value="date_desc">Date (Newest First)</MenuItem>
+              <MenuItem value="date_asc">Date (Oldest First)</MenuItem>
+              <MenuItem value="start_asc">Start Time (Earliest)</MenuItem>
+              <MenuItem value="start_desc">Start Time (Latest)</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleOpenAddDialog}
+          >
+            Add Session
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -300,9 +335,9 @@ const ClassSessionsPage = () => {
 
       {/* Sessions List */}
       <Paper sx={{ p: 2, position: "relative", minHeight: "300px" }}>
-        {sessions.length > 0 ? (
+        {sortedSessions.length > 0 ? (
           <List>
-            {sessions.map((session) => (
+            {sortedSessions.map((session) => (
               <Paper key={session.id} sx={{ mb: 2, p: 2, borderRadius: 2 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                   <Box>

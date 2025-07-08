@@ -20,7 +20,7 @@ import ClassStatsDialog from "./classes/ClassStatsDialog";
 import ClassAttendanceSummary from "./classes/ClassAttendanceSummary";
 import useClasses from "../../hooks/useClasses"; // We'll create this hook
 import { format } from "date-fns";
-import cacheService from '../../utils/cacheService';
+import cacheService from "../../utils/cacheService";
 
 const ClassesList = () => {
   const {
@@ -98,8 +98,8 @@ const ClassesList = () => {
     const result = await createClass(classData);
     if (result === true) {
       // Clear dashboard caches after class creation
-      cacheService.invalidateByPrefix('teacher_dashboard_');
-      cacheService.invalidateByPrefix('admin_dashboard_');
+      cacheService.invalidateByPrefix("teacher_dashboard_");
+      cacheService.invalidateByPrefix("admin_dashboard_");
     }
     setOpenAddDialog(false);
   };
@@ -108,8 +108,8 @@ const ClassesList = () => {
     const result = await updateClass(classId, classData);
     if (result === true) {
       // Clear dashboard caches after class update
-      cacheService.invalidateByPrefix('teacher_dashboard_');
-      cacheService.invalidateByPrefix('admin_dashboard_');
+      cacheService.invalidateByPrefix("teacher_dashboard_");
+      cacheService.invalidateByPrefix("admin_dashboard_");
     }
     setOpenEditDialog(false);
     setClassToEdit(null);
@@ -223,23 +223,27 @@ const ClassesList = () => {
         onUpdate={() => fetchClasses()}
       />
 
-      <ClassStatsDialog
-        open={openStatsDialog}
-        classData={selectedClass}
-        onClose={() => {
-          setOpenStatsDialog(false);
-          setSelectedClass(null);
-        }}
-      />
+      {openStatsDialog && selectedClass && (
+        <ClassStatsDialog
+          open={openStatsDialog}
+          classData={selectedClass}
+          onClose={() => {
+            setOpenStatsDialog(false);
+            setSelectedClass(null);
+          }}
+        />
+      )}
 
-      <ClassAttendanceSummary
-        open={openAttendanceSummaryDialog}
-        classData={selectedClass}
-        onClose={() => {
-          setOpenAttendanceSummaryDialog(false);
-          setSelectedClass(null);
-        }}
-      />
+      {openAttendanceSummaryDialog && selectedClass && (
+        <ClassAttendanceSummary
+          open={openAttendanceSummaryDialog}
+          classData={selectedClass}
+          onClose={() => {
+            setOpenAttendanceSummaryDialog(false);
+            setSelectedClass(null);
+          }}
+        />
+      )}
     </Box>
   );
 };

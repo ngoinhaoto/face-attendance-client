@@ -137,12 +137,12 @@ const TeacherDashboard = () => {
         const now = new Date();
         const upcoming = sortedSessions
           .filter((session) => new Date(session.session_date) > now)
-          .slice(0, 5);
+          .slice(0, 7);
 
         // Recent sessions (past dates)
         const recent = sortedSessions
           .filter((session) => new Date(session.session_date) <= now)
-          .slice(0, 5);
+          .slice(0, 7);
 
         setUpcomingSessions(upcoming);
         setRecentSessions(recent);

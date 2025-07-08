@@ -11,10 +11,11 @@ import AttendanceCheckIn from "../../student/AttendanceCheckIn";
 
 import TeacherDashboard from "../../teacher/TeacherDashboard";
 import ClassSessionsPage from "../../teacher/ClassSessionsPage";
-import ClassAttendanceSummary from "../../admin/classes/ClassAttendanceSummary";
+
 import SessionAttendancePage from "../../teacher/SessionAttendancePage";
 import SessionDetailsPage from "../../teacher/SessionDetailsPage";
 import TeacherSessionsList from "../../teacher/TeacherSessionsList";
+import ClassAttendanceSummaryPage from "../../teacher/ClassAttendanceSummaryPage";
 
 const DashboardRoutes = ({ user }) => {
   // Redirect to login if user data is missing
@@ -54,7 +55,7 @@ const TeacherRoutes = () => (
     <Route path="/classes/:classId/sessions" element={<ClassSessionsPage />} />
     <Route
       path="/classes/:classId/attendance"
-      element={<ClassAttendanceSummary />}
+      element={<ClassAttendanceSummaryPage />}
     />
     <Route
       path="/classes/:classId/sessions/:sessionId"

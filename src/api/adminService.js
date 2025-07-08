@@ -32,50 +32,60 @@ const getUsers = async (role = null) => {
 
 // Enhanced functions with caching
 const getClasses = async (includeDetails = true) => {
-  const cacheKey = "classes_list";
+  const cacheKey = includeDetails ? "classes_with_details" : "classes";
   const cachedData = getCachedData(cacheKey);
 
   if (cachedData) {
     return cachedData;
   }
 
+  const response = await apiService.get("/classes", {
+    params: {
+      include_students: includeDetails,
+      include_sessions: includeDetails,
+      include_sessions_count: true,
+    },
+  });
+
+  // If the API doesn't return students/sessions arrays, add empty arrays
+  const classes = response.data.map((cls) => ({
+    ...cls,
+    students: cls.students || [],
+    sessions: cls.sessions || [],
+  }));
+
+  // If details are requested but not included in response, fetch them
+  if (includeDetails) {
+    await Promise.all(
+      classes.map(async (cls) => {
+        // Only fetch students if not already included
+        if (!Array.isArray(cls.students) || cls.students.length === 0) {
+          cls.students = await getClassStudents(cls.id);
+        }
+
+        // Only fetch sessions if not already included
+        if (!Array.isArray(cls.sessions) || cls.sessions.length === 0) {
+          cls.sessions = await getClassSessions(cls.id);
+        }
+      }),
+    );
+  }
+
+  setCachedData(cacheKey, classes);
+  return classes;
+};
+
+const getClassById = async (classId) => {
+  const cacheKey = `class_${classId}`;
+  const cachedData = getCachedData(cacheKey);
+  if (cachedData) return cachedData;
+
   try {
-    const response = await apiService.get("/classes", {
-      params: {
-        include_students: includeDetails,
-        include_sessions: includeDetails,
-        include_sessions_count: true,
-      },
-    });
-
-    // If the API doesn't return students/sessions arrays, add empty arrays
-    const classes = response.data.map((cls) => ({
-      ...cls,
-      students: cls.students || [],
-      sessions: cls.sessions || [],
-    }));
-
-    // If details are requested but not included in response, fetch them
-    if (includeDetails) {
-      await Promise.all(
-        classes.map(async (cls) => {
-          // Only fetch students if not already included
-          if (!Array.isArray(cls.students) || cls.students.length === 0) {
-            cls.students = await getClassStudents(cls.id);
-          }
-
-          // Only fetch sessions if not already included
-          if (!Array.isArray(cls.sessions) || cls.sessions.length === 0) {
-            cls.sessions = await getClassSessions(cls.id);
-          }
-        }),
-      );
-    }
-
-    setCachedData(cacheKey, classes);
-    return classes;
+    const response = await apiService.get(`/classes/${classId}`);
+    setCachedData(cacheKey, response.data);
+    return response.data;
   } catch (error) {
-    console.error("Error fetching classes:", error);
+    console.error(`Error fetching class ${classId}:`, error);
     throw error;
   }
 };
@@ -208,10 +218,11 @@ const deleteUser = async (userId) => {
     clearCachePattern("users_");
     clearCachePattern(`user_${userId}`);
 
-    // User might be in classes, so clear class-related caches
     clearCachePattern("class_students_");
     clearCachePattern("classes");
     clearCacheKey("classes_list");
+    clearCachePattern("dashboard_");
+    clearCachePattern("attendance_session_");
 
     return response.data;
   } catch (error) {
@@ -545,6 +556,7 @@ const adminService = {
   getClassStudents,
   getClassSessions,
   getSessionAttendance,
+  getClassById,
 
   // CREATE operations
   createUser,

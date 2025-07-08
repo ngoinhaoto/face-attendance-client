@@ -22,6 +22,7 @@ import {
   MenuItem,
   FormControl,
   Grid,
+  TextField,
 } from "@mui/material";
 import {
   Check as PresentIcon,
@@ -30,6 +31,8 @@ import {
   Edit as EditIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
+  Check as CheckIcon,
+  Close as CloseIcon,
 } from "@mui/icons-material";
 import { format, parseISO } from "date-fns";
 import adminService from "../../../api/adminService";
@@ -51,6 +54,7 @@ const SessionAttendanceDialog = ({ open, session, onClose }) => {
   const [error, setError] = useState("");
   const [editingRow, setEditingRow] = useState(null);
   const [editedStatus, setEditedStatus] = useState("");
+  const [editedLateMinutes, setEditedLateMinutes] = useState(0);
   const [stats, setStats] = useState({
     present: 0,
     late: 0,
@@ -128,36 +132,31 @@ const SessionAttendanceDialog = ({ open, session, onClose }) => {
   const startEditing = (record) => {
     setEditingRow(record.student_id);
     setEditedStatus(record.status);
+    setEditedLateMinutes(record.late_minutes || 0);
   };
 
   const cancelEditing = () => {
     setEditingRow(null);
     setEditedStatus("");
+    setEditedLateMinutes(0);
   };
 
   const saveAttendanceChange = async (studentId) => {
     try {
       setLoading(true);
-
-      // Call API to update attendance status
       await adminService.updateAttendanceStatus(
         session.id,
         studentId,
         editedStatus,
+        editedStatus === "late" ? editedLateMinutes : 0,
       );
-
-      // Refresh attendance data
-      await fetchAttendance();
-
-      // Exit edit mode
+      await fetchAttendance(); // Refresh data
       setEditingRow(null);
       setEditedStatus("");
-
-      toast.success("Attendance status updated");
+      setEditedLateMinutes(0);
+      toast.success("Attendance updated");
     } catch (error) {
-      console.error("Error updating attendance:", error);
       setError("Failed to update attendance");
-      toast.error("Failed to update attendance");
     } finally {
       setLoading(false);
     }
@@ -350,16 +349,40 @@ const SessionAttendanceDialog = ({ open, session, onClose }) => {
                       </TableCell>
                       <TableCell>
                         {editingRow === record.student_id ? (
-                          <FormControl size="small" fullWidth>
+                          <>
                             <Select
                               value={editedStatus}
-                              onChange={handleStatusChange}
+                              onChange={(e) => setEditedStatus(e.target.value)}
+                              size="small"
+                              sx={{ minWidth: 100 }}
                             >
                               <MenuItem value="present">Present</MenuItem>
                               <MenuItem value="late">Late</MenuItem>
                               <MenuItem value="absent">Absent</MenuItem>
                             </Select>
-                          </FormControl>
+                            {editedStatus === "late" && (
+                              <TextField
+                                type="number"
+                                value={editedLateMinutes}
+                                onChange={(e) =>
+                                  setEditedLateMinutes(Number(e.target.value))
+                                }
+                                size="small"
+                                label="Late (min)"
+                                sx={{ width: 80, ml: 1 }}
+                              />
+                            )}
+                            <IconButton
+                              onClick={() =>
+                                saveAttendanceChange(record.student_id)
+                              }
+                            >
+                              <CheckIcon color="success" />
+                            </IconButton>
+                            <IconButton onClick={cancelEditing}>
+                              <CloseIcon color="error" />
+                            </IconButton>
+                          </>
                         ) : (
                           getStatusChip(record.status, record.late_minutes)
                         )}
@@ -393,6 +416,7 @@ const SessionAttendanceDialog = ({ open, session, onClose }) => {
                           <IconButton
                             size="small"
                             onClick={() => startEditing(record)}
+                            title="Edit Attendance"
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>

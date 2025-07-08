@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSelector } from "react-redux";
 import adminService from "../api/adminService";
 import { toast } from "react-toastify";
 import { getCachedData, setCachedData } from "../utils/apiCache";
 
 const useClasses = () => {
+  const { user } = useSelector((state) => state.auth);
   const [classes, setClasses] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +75,8 @@ const useClasses = () => {
 
   // Fetch teachers
   const fetchTeachers = async () => {
+    if (user?.role !== "admin") return;
+
     try {
       const users = await adminService.getUsers();
       const teachersList = users.filter((user) => user.role === "teacher");
@@ -190,11 +194,13 @@ const useClasses = () => {
   useEffect(() => {
     const initData = async () => {
       await fetchClasses();
-      await fetchTeachers();
+      if (user?.role === "admin") {
+        await fetchTeachers();
+      }
     };
 
     initData();
-  }, [fetchClasses]);
+  }, [fetchClasses, user]);
 
   return {
     classes,

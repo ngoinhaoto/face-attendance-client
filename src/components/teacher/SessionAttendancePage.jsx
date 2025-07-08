@@ -18,6 +18,8 @@ import {
   Select,
   MenuItem,
   Grid,
+  IconButton,
+  TextField,
 } from "@mui/material";
 import {
   PieChart,
@@ -30,9 +32,12 @@ import {
 import adminService from "../../api/adminService";
 import apiService from "../../api/apiService";
 import { format, parseISO } from "date-fns";
+import EditIcon from "@mui/icons-material/Edit";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 
 const COLORS = ["#4CAF50", "#FF9800", "#F44336"];
-const ATTENDANCE_STATUSES = ["Present", "Late", "Absent"];
+const ATTENDANCE_STATUSES = ["All", "Present", "Late", "Absent"];
 
 const SessionAttendancePage = () => {
   const { classId, sessionId } = useParams();
@@ -41,7 +46,10 @@ const SessionAttendancePage = () => {
   const [error, setError] = useState(null);
   const [attendanceData, setAttendanceData] = useState([]);
   const [sessionDetails, setSessionDetails] = useState({});
-  const [selectedStatus, setSelectedStatus] = useState("Present");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [editingRow, setEditingRow] = useState(null);
+  const [editedStatus, setEditedStatus] = useState("present");
+  const [editedLateMinutes, setEditedLateMinutes] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -59,6 +67,7 @@ const SessionAttendancePage = () => {
           const attendanceResponse = await apiService.get(
             `/classes/${classId}/sessions/${sessionId}/attendance`,
           );
+          console.log("ATTENDANCE RES:", attendanceResponse.data);
           setAttendanceData(attendanceResponse.data || []);
         } catch (classEndpointError) {
           console.warn(
@@ -87,19 +96,23 @@ const SessionAttendancePage = () => {
     setSelectedStatus(event.target.value);
   };
 
-  const filteredAttendance = attendanceData.filter(
-    (record) => record.status === selectedStatus,
-  );
+  const filteredAttendance =
+    selectedStatus === "All"
+      ? attendanceData
+      : attendanceData.filter(
+          (record) =>
+            record.status?.toLowerCase() === selectedStatus.toLowerCase(),
+        );
 
   const totalStudents = attendanceData.length;
   const presentCount = attendanceData.filter(
-    (record) => record.status === "Present",
+    (record) => record.status?.toLowerCase() === "present",
   ).length;
   const lateCount = attendanceData.filter(
-    (record) => record.status === "Late",
+    (record) => record.status?.toLowerCase() === "late",
   ).length;
   const absentCount = attendanceData.filter(
-    (record) => record.status === "Absent",
+    (record) => record.status?.toLowerCase() === "absent",
   ).length;
 
   const attendanceChartData = [
@@ -134,6 +147,54 @@ const SessionAttendancePage = () => {
     } catch (error) {
       console.error("Error fetching attendance data:", error);
       setError("Failed to load attendance data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEditing = (record) => {
+    setEditingRow(record.student_id);
+    setEditedStatus(record.status?.toLowerCase() || "present");
+    setEditedLateMinutes(record.late_minutes || 0);
+  };
+
+  const cancelEditing = () => {
+    setEditingRow(null);
+    setEditedStatus("present");
+    setEditedLateMinutes(0);
+  };
+
+  const saveAttendanceChange = async (studentId) => {
+    try {
+      setLoading(true);
+
+      // Prepare the data for saving
+      const attendanceRecord = {
+        status: editedStatus,
+        late_minutes: editedStatus === "late" ? editedLateMinutes : 0,
+      };
+
+      // Call the update API (assuming it exists)
+      await apiService.put(
+        `/attendance/sessions/${sessionId}/students/${studentId}`,
+        attendanceRecord,
+      );
+
+      // Update the local state optimistically
+      setAttendanceData((prevData) =>
+        prevData.map((record) =>
+          record.student_id === studentId
+            ? { ...record, ...attendanceRecord }
+            : record,
+        ),
+      );
+
+      setEditingRow(null);
+      setEditedStatus("present");
+      setEditedLateMinutes(0);
+    } catch (error) {
+      console.error("Error saving attendance change:", error);
+      setError("Failed to save attendance change");
     } finally {
       setLoading(false);
     }
@@ -214,26 +275,89 @@ const SessionAttendancePage = () => {
                 <TableCell>Student Name</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Date</TableCell>
+                <TableCell align="center">Late Minutes</TableCell>
+                <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredAttendance.map((record) => (
-                <TableRow key={record.id}>
-                  <TableCell>{record.studentName}</TableCell>
+                <TableRow key={record.student_id}>
+                  <TableCell>{record.full_name || record.username}</TableCell>
                   <TableCell>
                     <Chip
-                      label={record.status}
+                      label={
+                        record.status.charAt(0).toUpperCase() +
+                        record.status.slice(1)
+                      }
                       color={
-                        record.status === "Present"
+                        record.status?.toLowerCase() === "present"
                           ? "primary"
-                          : record.status === "Late"
+                          : record.status?.toLowerCase() === "late"
                           ? "warning"
+                          : record.status?.toLowerCase() === "absent"
+                          ? "error"
                           : "default"
                       }
                     />
                   </TableCell>
                   <TableCell>
-                    {format(parseISO(record.date), "MMMM dd, yyyy")}
+                    {record.check_in_time
+                      ? format(
+                          parseISO(record.check_in_time),
+                          "MMMM dd, yyyy h:mm a",
+                        )
+                      : "-"}
+                  </TableCell>
+                  <TableCell align="center">
+                    {record.status?.toLowerCase() === "late"
+                      ? record.late_minutes
+                      : "-"}
+                  </TableCell>
+                  <TableCell align="center">
+                    {editingRow === record.student_id ? (
+                      <>
+                        <Select
+                          value={editedStatus}
+                          onChange={(e) => setEditedStatus(e.target.value)}
+                          size="small"
+                          sx={{ minWidth: 100 }}
+                        >
+                          <MenuItem value="present">Present</MenuItem>
+                          <MenuItem value="late">Late</MenuItem>
+                          <MenuItem value="absent">Absent</MenuItem>
+                        </Select>
+                        {editedStatus === "late" && (
+                          <TextField
+                            type="number"
+                            value={editedLateMinutes}
+                            onChange={(e) =>
+                              setEditedLateMinutes(Number(e.target.value))
+                            }
+                            size="small"
+                            label="Late (min)"
+                            sx={{ width: 80, ml: 1 }}
+                          />
+                        )}
+                        <IconButton
+                          onClick={() =>
+                            saveAttendanceChange(record.student_id)
+                          }
+                        >
+                          <CheckIcon color="success" />
+                        </IconButton>
+                        <IconButton onClick={cancelEditing}>
+                          <CloseIcon color="error" />
+                        </IconButton>
+                      </>
+                    ) : (
+                      <IconButton
+                        size="small"
+                        onClick={() => startEditing(record)}
+                        title="Edit Attendance"
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

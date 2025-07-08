@@ -85,7 +85,7 @@ const TeacherClassCard = ({
           color="secondary"
           onClick={() => onViewAttendance(classData)}
         >
-          View Attendance
+          View Stats
         </Button>
       </CardActions>
     </Card>
