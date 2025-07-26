@@ -24,7 +24,6 @@ import TeacherClassCard from "./TeacherClassCard";
 import TeacherStatsCards from "./TeacherStatsCards";
 import TeacherSessionsList from "./TeacherSessionsList";
 import useClasses from "../../hooks/useClasses";
-import { getCachedData, setCachedData } from "../../utils/apiCache";
 import cacheService from "../../utils/cacheService";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
@@ -98,6 +97,7 @@ const TeacherDashboard = () => {
               className: cls.name,
               classCode: cls.class_code,
               classId: cls.id,
+              id: session.id || session.session_id, // Ensure this line exists
             }));
 
             allSessions = [...allSessions, ...sessions];
@@ -127,6 +127,14 @@ const TeacherDashboard = () => {
             }
           }
         }
+
+        // Add this console.log to inspect allSessions
+        console.log("All sessions collected:", allSessions);
+        allSessions.forEach((s, i) => {
+          if (!s.id) {
+            console.warn(`Session at index ${i} has no ID:`, s);
+          }
+        });
 
         // Sort all sessions by date
         const sortedSessions = [...allSessions].sort(

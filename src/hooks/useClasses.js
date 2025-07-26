@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
 import adminService from "../api/adminService";
 import { toast } from "react-toastify";
-import { getCachedData, setCachedData } from "../utils/apiCache";
+// import { getCachedData, setCachedData } from "../utils/apiCache"; // These are now part of adminService
+import cacheService from "../utils/cacheService"; // Still useful for manual invalidation
 
 const useClasses = () => {
   const { user } = useSelector((state) => state.auth);
@@ -14,7 +15,7 @@ const useClasses = () => {
   // Add a request tracking ref to prevent duplicate requests
   const pendingRequests = useRef({});
 
-  // Fetch classes with student data
+  // Fetch classes with student and session data
   const fetchClasses = useCallback(async () => {
     // Check if there's already a pending request
     if (pendingRequests.current.classes) {
@@ -28,40 +29,15 @@ const useClasses = () => {
       setLoading(true);
 
       // Create a promise for this request and store it
-      const requestPromise = adminService.getClasses();
+      // Call adminService.getClasses with includeDetails = true
+      const requestPromise = adminService.getClasses(true); // <--- CHANGE HERE
       pendingRequests.current.classes = requestPromise;
 
       const data = await requestPromise;
-      console.log("Initial classes data:", data);
+      console.log("Initial classes data (with details):", data);
 
-      // Process classes sequentially instead of in parallel
-      const classesWithStudents = [];
-      for (const cls of data) {
-        try {
-          console.log(`Fetching students for class ${cls.id}`);
-          // Check cache first
-          const cacheKey = `class_students_${cls.id}`;
-          let students = getCachedData(cacheKey);
-
-          if (!students) {
-            // If not in cache, fetch and cache
-            students = await adminService.getClassStudents(cls.id);
-            setCachedData(cacheKey, students);
-          } else {
-            console.log(`Using cached students for class ${cls.id}`);
-          }
-
-          console.log(`Class ${cls.id} has ${students.length} students`);
-          classesWithStudents.push({ ...cls, students });
-        } catch (err) {
-          console.error(`Error fetching students for class ${cls.id}:`, err);
-          classesWithStudents.push({ ...cls, students: [] });
-        }
-      }
-
-      console.log("Classes with students:", classesWithStudents);
-      setClasses(classesWithStudents);
-      return classesWithStudents;
+      setClasses(data);
+      return data;
     } catch (error) {
       console.error("Error fetching classes:", error);
       toast.error("Failed to load classes");
@@ -99,6 +75,15 @@ const useClasses = () => {
       };
 
       await adminService.createClass(classDataForApi);
+
+      // adminService.createClass already handles its own cache invalidation.
+      // These are redundant if adminService is doing its job:
+      // cacheService.invalidate("classes");
+      // cacheService.invalidate("classes_with_details");
+      // cacheService.invalidateByPrefix("admin_dashboard_");
+      // cacheService.invalidateByPrefix("teacher_dashboard_"); // No such cache in adminService
+
+      // Refetch classes to update UI (this is correct and necessary)
       await fetchClasses();
       toast.success("Class added successfully!");
       return true;
@@ -118,7 +103,8 @@ const useClasses = () => {
     setIsOperationLoading(true);
     try {
       await adminService.updateClass(classId, classData);
-      await fetchClasses();
+      // adminService.updateClass already handles its own cache invalidation.
+      await fetchClasses(); // Refetch to update UI
       toast.success("Class updated successfully!");
       return true;
     } catch (error) {
@@ -132,18 +118,19 @@ const useClasses = () => {
     }
   };
 
+  // This function is redundant if fetchClasses already gets details
+  // Unless it's used directly elsewhere and needs its own explicit fetch
   const fetchClassesWithDetails = async () => {
-    const classes = await adminService.getClasses();
-    const classesWithDetails = await Promise.all(
-      classes.map(async (cls) => {
-        const [students, sessions] = await Promise.all([
-          adminService.getClassStudents(cls.id),
-          adminService.getClassSessions(cls.id),
-        ]);
-        return { ...cls, students, sessions };
-      }),
-    );
-    return classesWithDetails;
+    // If getClasses(true) is used in fetchClasses, this might just call it again
+    // Consider if this is still needed or can be removed/simplified.
+    const classes = await adminService.getClasses(true); // Ensure it's true here too
+    // The mapping logic might not be needed if adminService.getClasses(true)
+    // already returns the data in the desired format
+    return classes.map((cls) => ({
+      ...cls,
+      students: Array.isArray(cls.students) ? cls.students : [],
+      sessions: Array.isArray(cls.sessions) ? cls.sessions : [],
+    }));
   };
 
   // Delete a class
@@ -151,7 +138,8 @@ const useClasses = () => {
     setIsOperationLoading(true);
     try {
       await adminService.deleteClass(classId);
-      await fetchClasses();
+      // adminService.deleteClass already handles its own cache invalidation.
+      await fetchClasses(); // Refetch to update UI
       toast.success("Class deleted successfully!");
       return true;
     } catch (error) {
@@ -213,7 +201,7 @@ const useClasses = () => {
     updateClass,
     deleteClass,
     formatDateForInput,
-    fetchClassesWithDetails,
+    fetchClassesWithDetails, // Consider if this is still needed
     getTeacherName,
   };
 };

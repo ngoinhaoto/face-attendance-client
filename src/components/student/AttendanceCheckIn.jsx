@@ -23,7 +23,6 @@ import {
   Schedule as ClockIcon,
 } from "@mui/icons-material";
 import apiService from "../../api/apiService";
-import { clearCachePattern } from "../../utils/apiCache";
 
 // Import utility functions from dateUtils
 import { formatDate, formatTime, isSessionActive } from "../../utils/dateUtils";

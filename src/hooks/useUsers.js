@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react"; // ADDED useCallback
 import adminService from "../api/adminService";
 import { toast } from "react-toastify";
 
@@ -11,7 +11,9 @@ const useUsers = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  const fetchUsers = async () => {
+  // Wrap fetchUsers in useCallback to prevent unnecessary re-runs
+  const fetchUsers = useCallback(async () => {
+    // <--- ADDED useCallback
     try {
       setLoading(true);
       setError(null);
@@ -28,12 +30,12 @@ const useUsers = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterRole]); // <--- filterRole is a dependency for this useCallback
 
   const deleteUser = async (userId) => {
     try {
       await adminService.deleteUser(userId);
-      await fetchUsers();
+      await fetchUsers(); // This will trigger a re-fetch and UI update
       toast.success("User deleted successfully!");
       return true;
     } catch (error) {
@@ -45,10 +47,8 @@ const useUsers = () => {
 
   const createUser = async (userData) => {
     try {
-      // Ensure we're sending the right ID fields based on role
       const userDataToSend = { ...userData };
 
-      // Remove unnecessary ID fields based on role
       if (userData.role === "student") {
         delete userDataToSend.staff_id;
       } else {
@@ -56,7 +56,7 @@ const useUsers = () => {
       }
 
       await adminService.createUser(userDataToSend);
-      await fetchUsers();
+      await fetchUsers(); // This will trigger a re-fetch and UI update
       toast.success("User added successfully!");
       return true;
     } catch (error) {
@@ -69,10 +69,8 @@ const useUsers = () => {
 
   const updateUser = async (userId, userData) => {
     try {
-      // Ensure we're sending the right ID fields based on role
       const userDataToSend = { ...userData };
 
-      // Remove unnecessary ID fields based on role
       if (userData.role === "student") {
         delete userDataToSend.staff_id;
       } else {
@@ -80,7 +78,7 @@ const useUsers = () => {
       }
 
       await adminService.updateUser(userId, userDataToSend);
-      await fetchUsers();
+      await fetchUsers(); // This will trigger a re-fetch and UI update
       toast.success("User updated successfully!");
       return true;
     } catch (error) {
@@ -94,7 +92,7 @@ const useUsers = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [filterRole]);
+  }, [fetchUsers]); // <--- DEPENDENCY CHANGED TO fetchUsers
 
   const filteredUsers = users.filter(
     (user) =>

@@ -1,5 +1,6 @@
 import apiService from "./apiService";
 import cacheService from "../utils/cacheService";
+import { cache } from "react";
 
 // Cache utility functions
 const getCachedData = (key) => cacheService.get(key);
@@ -171,11 +172,11 @@ const createUser = async (userData) => {
 const createClass = async (classData) => {
   try {
     const response = await apiService.post("/classes", classData);
-
-    // Clear classes cache
     clearCacheKey("classes");
-    clearCacheKey("classes_list");
-    clearCacheKey("all_classes");
+
+    clearCacheKey("classes_with_details");
+
+    clearCachePattern("dashboard_");
 
     return response.data;
   } catch (error) {
@@ -183,22 +184,22 @@ const createClass = async (classData) => {
     throw error;
   }
 };
-
 const createClassSession = async (sessionData) => {
   try {
     const response = await apiService.post("/classes/sessions", sessionData);
 
-    // Clear ALL class-related caches to ensure counts update everywhere
-    clearCacheKey("classes");
-    clearCacheKey("classes_list");
-    clearCacheKey("all_classes");
-
-    // Clear specific class cache
+    // 1. Invalidate the specific list of sessions for this class
     if (sessionData.class_id) {
-      clearCachePattern(`class_${sessionData.class_id}`);
+      clearCacheKey(`class_sessions_${sessionData.class_id}`);
+      // Also invalidate the single class detail if it includes session count or summary
+      clearCacheKey(`class_${sessionData.class_id}`);
     }
 
-    // Clear dashboard data as new sessions affect analytics
+    // 2. Invalidate general class lists, as session counts might be updated
+    clearCacheKey("classes");
+    clearCacheKey("classes_with_details");
+
+    // 3. Invalidate dashboard data as new sessions affect analytics/activity
     clearCachePattern("dashboard_");
 
     return response.data;
@@ -208,20 +209,28 @@ const createClassSession = async (sessionData) => {
   }
 };
 
-// DELETE operations
 const deleteUser = async (userId) => {
   try {
     const response = await apiService.delete(`/users/${userId}`);
 
-    // Clear relevant caches
-    clearCacheKey("users");
-    clearCachePattern("users_");
-    clearCachePattern(`user_${userId}`);
+    // Clear relevant caches for a deleted user:
+    clearCacheKey("users"); // General list of users
+    clearCachePattern("users_"); // Role-specific user lists
 
+    // If you have a cache for individual users by ID:
+    clearCacheKey(`user_${userId}`);
+
+    // If the deleted user was a student or teacher, it impacts classes:
+    // Invalidate all class student lists (if the deleted user was a student)
     clearCachePattern("class_students_");
-    clearCachePattern("classes");
-    clearCacheKey("classes_list");
+
+    // Invalidate general class lists (if the deleted user was a teacher or affected class counts)
+    clearCacheKey("classes");
+    clearCacheKey("classes_with_details");
+
+    // Clear dashboard data as user counts/metrics will change
     clearCachePattern("dashboard_");
+
     clearCachePattern("attendance_session_");
 
     return response.data;
@@ -235,13 +244,18 @@ const deleteClass = async (classId) => {
   try {
     const response = await apiService.delete(`/classes/${classId}`);
 
-    // Clear relevant caches
+    // 1. Invalidate the general list of classes
     clearCacheKey("classes");
-    clearCacheKey("classes_list");
-    clearCacheKey("all_classes");
-    clearCachePattern(`class_${classId}`);
 
-    // Also clear dashboard data
+    // 2. Invalidate the detailed list of classes (CRITICAL for the main class display)
+    clearCacheKey("classes_with_details");
+
+    // 3. Invalidate the cache for this specific class's details
+    clearCacheKey(`class_${classId}`);
+
+    clearCacheKey(`class_students_${classId}`);
+    clearCacheKey(`class_sessions_${classId}`);
+
     clearCachePattern("dashboard_");
 
     return response.data;
@@ -250,7 +264,6 @@ const deleteClass = async (classId) => {
     throw error;
   }
 };
-
 const deleteClassSession = async (sessionId) => {
   try {
     // First, get the session to know its class_id
@@ -290,23 +303,28 @@ const deleteClassSession = async (sessionId) => {
   }
 };
 
-// UPDATE operations
 const updateUser = async (userId, userData) => {
   try {
     console.log("Sending update for user:", userId, "with data:", userData);
     const response = await apiService.put(`/users/${userId}`, userData);
 
-    // Clear related cache entries when a user is updated
-    clearCacheKey("users");
-    clearCachePattern("users_");
-    clearCachePattern(`user_${userId}`);
+    clearCacheKey("users"); // Invalidate general list of users
+    clearCachePattern("users_"); // Invalidate role-specific user lists (e.g., users_student, users_teacher)
 
-    // If it's a student, also clear class student caches
-    if (userData.role === "student") {
+    clearCacheKey(`user_${userId}`);
+
+    // If the user's role or details affect class data:
+    if (userData.role === "student" || userData.role === "teacher") {
+      // If student data (e.g., name) is displayed in class student lists
       clearCachePattern("class_students_");
-      clearCachePattern("classes"); // Clear classes cache since it includes student data
-      clearCacheKey("classes_list");
+
+      // If class lists include teacher names or student counts
+      clearCacheKey("classes");
+      clearCacheKey("classes_with_details");
     }
+
+    // Clear dashboard data as user counts/roles might affect metrics
+    clearCachePattern("dashboard_");
 
     console.log("Update response:", response.data);
     return response.data;
@@ -319,20 +337,14 @@ const updateUser = async (userId, userData) => {
     throw error;
   }
 };
-
 const updateClass = async (classId, classData) => {
   try {
     console.log("Sending update for class:", classId, "with data:", classData);
     const response = await apiService.put(`/classes/${classId}`, classData);
     console.log("Update response:", response.data);
-
-    // Clear all class-related caches
     clearCacheKey("classes");
-    clearCacheKey("classes_list");
-    clearCacheKey("all_classes");
-    clearCachePattern(`class_${classId}`);
-
-    // Clear dashboard data
+    clearCacheKey("classes_with_details");
+    clearCacheKey(`class_${classId}`);
     clearCachePattern("dashboard_");
 
     return response.data;
@@ -353,38 +365,38 @@ const updateClassSession = async (sessionId, sessionData) => {
       sessionData,
     );
 
-    // Clear all relevant caches
-    if (sessionData.class_id) {
-      clearCachePattern(`class_${sessionData.class_id}`);
+    const classId = sessionData.class_id;
+
+    if (classId) {
+      clearCacheKey(`class_sessions_${classId}`);
+      clearCacheKey(`class_${classId}`);
     }
-
     clearCacheKey("classes");
-    clearCacheKey("classes_list");
-    clearCacheKey("all_classes");
+    clearCacheKey("classes_with_details");
 
-    // Clear dashboard data
+    clearCacheKey(`attendance_session_${sessionId}`);
     clearCachePattern("dashboard_");
-
     return response.data;
   } catch (error) {
     console.error("Error updating class session:", error);
     throw error;
   }
 };
-
 // STUDENT-CLASS relationship operations
 const addStudentToClass = async (classId, studentId) => {
   try {
     const response = await apiService.post(
       `/classes/${classId}/students/${studentId}`,
     );
+    clearCacheKey(`class_${classId}`);
 
-    // Clear relevant caches
-    clearCachePattern(`class_${classId}`);
-    clearCachePattern(`class_students_${classId}`);
-    clearCacheKey("classes");
-    clearCacheKey("classes_list");
-    clearCacheKey("all_classes");
+    clearCacheKey(`class_students_${classId}`); // Changed from Pattern to Key assuming it's a specific key, if it's a pattern, keep it
+
+    clearCacheKey("classes"); // For the basic list without details
+
+    clearCacheKey("classes_with_details");
+
+    clearCachePattern("dashboard_");
 
     return response.data;
   } catch (error) {
@@ -400,12 +412,15 @@ const removeStudentFromClass = async (classId, studentId) => {
       `/classes/${classId}/students/${studentId}`,
     );
 
-    // Clear relevant caches
-    clearCachePattern(`class_${classId}`);
-    clearCachePattern(`class_students_${classId}`);
+    clearCacheKey(`class_${classId}`);
+
+    clearCacheKey(`class_students_${classId}`);
+
     clearCacheKey("classes");
-    clearCacheKey("classes_list");
-    clearCacheKey("all_classes");
+
+    clearCacheKey("classes_with_details");
+
+    clearCachePattern("dashboard_");
 
     console.log("Remove student response:", response.data);
     return response.data;
@@ -418,7 +433,6 @@ const removeStudentFromClass = async (classId, studentId) => {
     throw error;
   }
 };
-
 // ATTENDANCE operations
 const updateAttendanceStatus = async (sessionId, studentId, status) => {
   try {

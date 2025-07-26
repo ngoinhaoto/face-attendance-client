@@ -16,6 +16,22 @@ import { format, parseISO, isToday } from "date-fns";
 const TeacherSessionsList = ({ sessions, emptyMessage, upcoming }) => {
   const navigate = useNavigate();
 
+  // Add this useEffect to inspect the incoming sessions prop
+  // This is for debugging purposes. You can remove it once the issue is understood.
+  // useEffect(() => {
+  //   console.log("TeacherSessionsList received sessions:", sessions);
+  //   if (sessions.length > 0) {
+  //     sessions.forEach((session, index) => {
+  //       if (session.id === undefined || session.id === null) {
+  //         console.warn(`Session at index ${index} has undefined/null ID!`, session);
+  //       }
+  //       if (session.classId === undefined || session.classId === null) {
+  //         console.warn(`Session at index ${index} has undefined/null classId!`, session);
+  //       }
+  //     });
+  //   }
+  // }, [sessions]);
+
   const formatDate = (dateStr) => {
     try {
       const date = parseISO(dateStr);
@@ -40,7 +56,10 @@ const TeacherSessionsList = ({ sessions, emptyMessage, upcoming }) => {
       {sessions.length > 0 ? (
         <List>
           {sessions.map((session, index) => (
-            <React.Fragment key={session.id}>
+            // Use a fallback key: if session.id is missing, use index or a unique string
+            <React.Fragment
+              key={session.id || `session-${session.classId}-${index}`}
+            >
               {index > 0 && <Divider />}
               <ListItem
                 alignItems="flex-start"
@@ -54,6 +73,8 @@ const TeacherSessionsList = ({ sessions, emptyMessage, upcoming }) => {
                           `/dashboard/classes/${session.classId}/sessions/${session.id}`,
                         )
                       }
+                      // Disable the button if session.id or classId is missing
+                      disabled={!session.id || !session.classId}
                     >
                       Manage
                     </Button>
@@ -66,6 +87,8 @@ const TeacherSessionsList = ({ sessions, emptyMessage, upcoming }) => {
                           `/dashboard/classes/${session.classId}/sessions/${session.id}/attendance`,
                         )
                       }
+                      // Disable the button if session.id or classId is missing
+                      disabled={!session.id || !session.classId}
                     >
                       View Attendance
                     </Button>
